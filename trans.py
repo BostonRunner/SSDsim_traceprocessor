@@ -1,44 +1,53 @@
 ##################################################################################
-# Python script of handling the output of blkparse and add the path of file      #
-# Please change the directory according to your system and device                #
+# Python script for processing blkparse output, including container ID tagging   #
 # Author: Ruofei Wu                                                              #
-# 10-28-2024                                                                     #
-# Renewed in 09-30-2024                                                          #
+# Updated: 2025-03-31                                                            #
 ##################################################################################
 
-
-# open the log
+# 打开输入输出文件
 origin_file = open("./results/result_path.txt", "r")
 final = open("./results/io.ascii", "w")
 cursor = 0
-print("File reading")
-# read the log
+
+print("Reading result_path.txt...")
 data = origin_file.readlines()
-print("File processing")
-# read the inode
-data_with_path = ""
+
+print("Processing lines...")
+output = ""
+
 for i in range(len(data)):
-    time = int(eval(data[i].split()[3]) * 1000000000)
-    print(data[i].split())
-    sector = int(eval(data[i].split()[12]))
-    size = int(eval(data[i].split()[9]))
-    layer = data[i].split()[-1]
-    if time > cursor:
-        is_lower_layer = -1
+    parts = data[i].split()
+    try:
+        # 提取时间（s → ns）
+        time = int(float(parts[3]) * 1e9)
+        sector = int(parts[12])
+        size = int(parts[9])
+
+        layer_flag = -1
+        container_id = -1
+
+        # 最后两个字段：[-2] 是 [UpperLayer]/[LowerLayer]，[-1] 是 [ContainerX]
+        layer = parts[-2]
         if layer == "[UpperLayer]":
-            is_lower_layer = 0
+            layer_flag = 0
         elif layer == "[LowerLayer]":
-            is_lower_layer = 1
-        data_with_path = data_with_path + ' ' + str(time) + " 1 0 " + str(sector) + ' ' + str(size) + ' ' \
-            + str(is_lower_layer) + '\n'
-        cursor = 0
-    else:
+            layer_flag = 1
+
+        container_str = parts[-1]  # "[ContainerX]"
+        if container_str.startswith("[Container") and container_str.endswith("]"):
+            container_id = int(container_str[10:-1])  # 提取 X
+
+        if time > cursor and container_id != -1:
+            output += f"{time} 1 0 {sector} {size} {layer_flag} {container_id}\n"
+            cursor = 0
+
+    except Exception as e:
+        print(f"Error at line {i}: {e}")
         continue
 
-
-# write the result in the new file "result_path.txt"
-print("process finished")
-final.write(data_with_path)
+print("Writing io.ascii...")
+final.write(output)
 origin_file.close()
 final.close()
+print("Done.")
 
